@@ -21,10 +21,10 @@ export default function Home() {
 
     try {
       // Connect to your Python Backend
-      const response = await axios.post("http://127.0.0.1:8000/generate", {
-        resume_text: resume,
-        job_description: jobDesc,
-      });
+      const response = await axios.post("https://mock-interviewer-api.onrender.com/generate", {
+    resume_text: resume,
+    job_description: jobDesc,
+});
       setResult(response.data);
     } catch (err: any) {
       console.error(err);
