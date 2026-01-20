@@ -20,11 +20,11 @@ export default function Home() {
     setResult(null);
 
     try {
-      // Connect to your Python Backend
+      // Connect to your Live Render Backend
       const response = await axios.post("https://mock-interviewer-api.onrender.com/generate", {
-    resume_text: resume,
-    job_description: jobDesc,
-});
+        resume_text: resume,
+        job_description: jobDesc,
+      });
       setResult(response.data);
     } catch (err: any) {
       console.error(err);
@@ -42,7 +42,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-900 text-white p-8 font-sans">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-blue-400">
-          Mock Interview Generator
+          Mock Interview Generator <span className="text-sm text-gray-500 font-normal">(Mentor Mode)</span>
         </h1>
 
         {/* INPUT SECTION */}
@@ -81,7 +81,7 @@ export default function Home() {
               : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
-          {loading ? "Generating Interview..." : "Generate Interview Plan"}
+          {loading ? "Generating Masterclass Plan..." : "Generate Interview Plan"}
         </button>
 
         {/* ERROR MESSAGE */}
@@ -94,6 +94,7 @@ export default function Home() {
         {/* RESULTS SECTION */}
         {result && (
           <div className="mt-12 space-y-8 animate-fade-in">
+            
             {/* Feedback */}
             <div className="bg-gray-800 p-6 rounded-lg border-l-4 border-yellow-500">
               <h2 className="text-xl font-bold mb-2 text-yellow-400">
@@ -105,20 +106,24 @@ export default function Home() {
             {/* Technical Questions */}
             <div>
               <h2 className="text-2xl font-bold mb-4 text-purple-400">
-                Technical Questions
+                Technical Questions (Deep Dive)
               </h2>
               <div className="space-y-4">
                 {result.technical_questions.map((q: any, i: number) => (
-                  <div key={i} className="bg-gray-800 p-6 rounded-lg">
-                    <p className="font-semibold text-lg mb-2">
-                      {i + 1}. {q.question_text}
-                    </p>
+                  <div key={i} className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                    <div className="flex justify-between items-start mb-3">
+                        <p className="font-semibold text-lg text-white">
+                        {i + 1}. {q.question_text}
+                        </p>
+                    </div>
+                    
                     <p className="text-sm text-gray-400 mb-4 italic">
                       Context: {q.context}
                     </p>
-                    <div className="bg-gray-900/50 p-4 rounded">
+
+                    <div className="bg-gray-900/50 p-4 rounded mb-4">
                       <p className="text-xs text-green-400 uppercase tracking-wide font-bold mb-2">
-                        Look for this in the answer:
+                        Key Points to Hit:
                       </p>
                       <ul className="list-disc list-inside space-y-1 text-gray-300">
                         {q.ideal_answer_points.map((point: string, j: number) => (
@@ -126,6 +131,17 @@ export default function Home() {
                         ))}
                       </ul>
                     </div>
+
+                    {/* --- NEW: MENTOR MODE REVEAL --- */}
+                    <details className="group mt-4 bg-gray-900/80 rounded-lg overflow-hidden border border-gray-600">
+                        <summary className="flex items-center gap-2 p-3 cursor-pointer hover:bg-gray-800 transition-colors text-sm font-medium text-cyan-400 select-none">
+                            <span>💡 Click to Learn the Concept (Mentor Guide)</span>
+                            <span className="group-open:rotate-180 transition-transform">▼</span>
+                        </summary>
+                        <div className="p-4 pt-0 text-gray-300 text-sm leading-relaxed border-t border-gray-700 mt-2">
+                            <p className="italic text-gray-400">"{q.answer_guide}"</p>
+                        </div>
+                    </details>
                   </div>
                 ))}
               </div>
@@ -138,13 +154,26 @@ export default function Home() {
               </h2>
               <div className="space-y-4">
                 {result.behavioral_questions.map((q: any, i: number) => (
-                  <div key={i} className="bg-gray-800 p-6 rounded-lg">
+                  <div key={i} className="bg-gray-800 p-6 rounded-lg border border-gray-700">
                     <p className="font-semibold text-lg mb-2">
                       {i + 1}. {q.question_text}
                     </p>
-                    <p className="text-sm text-gray-400 italic">
+                    <p className="text-sm text-gray-400 italic mb-4">
                       Context: {q.context}
                     </p>
+                    
+                    {/* --- NEW: MENTOR MODE REVEAL --- */}
+                    {q.answer_guide && (
+                        <details className="group mt-4 bg-gray-900/80 rounded-lg overflow-hidden border border-gray-600">
+                            <summary className="flex items-center gap-2 p-3 cursor-pointer hover:bg-gray-800 transition-colors text-sm font-medium text-pink-400 select-none">
+                                <span>💡 Mentor Tip: How to answer this</span>
+                                <span className="group-open:rotate-180 transition-transform">▼</span>
+                            </summary>
+                            <div className="p-4 pt-0 text-gray-300 text-sm leading-relaxed border-t border-gray-700 mt-2">
+                                <p className="italic text-gray-400">"{q.answer_guide}"</p>
+                            </div>
+                        </details>
+                    )}
                   </div>
                 ))}
               </div>
