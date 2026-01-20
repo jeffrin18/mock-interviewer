@@ -14,20 +14,19 @@ from pydantic_ai.models.groq import GroqModel
 load_dotenv()
 
 # --- 1. CONFIGURATION ---
-# Paste your Groq Key here
-# --- 1. CONFIGURATION ---
-# We get the key from the Environment Variables (Safe for GitHub)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY is not set. Check your .env file or Render settings.")
+    # Fallback for local testing if env var is missing
+    # But for Render, this will rely on the Environment Variable you set
+    pass 
 
 # --- 2. INITIALIZE MODEL ---
 model = GroqModel('llama-3.3-70b-versatile')
 
 agent = Agent(
     model,
-    system_prompt="You are a strict technical interviewer. You must output JSON only."
+    system_prompt="You are a Senior Staff Engineer at a Tier-1 Tech Company (like Google or Netflix). Your goal is to expose weak candidates."
 )
 
 app = FastAPI()
@@ -58,38 +57,42 @@ class UserInput(BaseModel):
 async def generate_interview(data: UserInput):
     print("Received request... Sending to Groq (Llama 3.3)...")
 
+    # --- THE UPGRADED PROMPT ---
     prompt = f"""
-    Analyze this candidate:
+    Analyze this candidate for a high-bar technical role.
     RESUME: {data.resume_text}
     JOB: {data.job_description}
     
     TASK:
-    Generate a harsh, realistic interview plan.
+    Create a 'Bar-Raiser' interview plan. 
     
-    OUTPUT REQUIREMENTS:
-    1. Feedback: 2-3 sentences on resume fit.
-    2. Technical Questions: EXACTLY 5 challenging questions.
-    3. Behavioral Questions: EXACTLY 3 situational questions.
-    
-    OUTPUT FORMAT:
-    Return ONLY valid JSON. No markdown. No conversational text.
+    GUIDELINES FOR TECHNICAL QUESTIONS:
+    1. NO "TEXTBOOK" DEFINITIONS. Do not ask "What is X?".
+    2. Ask SCENARIO-BASED questions. (e.g., "The production DB is slow. How do you debug?" or "Design a rate limiter.")
+    3. Focus on trade-offs, scalability, and edge cases.
+    4. If the resume lists React, ask about re-rendering performance or state management complex patterns.
+    5. If the resume lists Backend, ask about concurrency, caching, or database locking.
+
+    GUIDELINES FOR BEHAVIORAL:
+    1. Focus on conflict, failure, and ambiguity.
+    2. Ask for specific examples of when things went WRONG.
+
+    OUTPUT FORMAT (JSON ONLY):
     Use double quotes for keys.
-    
-    Structure:
     {{
-      "feedback": "string",
+      "feedback": "A brutally honest 2-sentence summary of the resume's weak spots.",
       "technical_questions": [
         {{
-          "question_text": "string",
-          "context": "string",
-          "ideal_answer_points": ["string", "string"]
+          "question_text": "A complex scenario or design problem...",
+          "context": "Why this matters (e.g., 'Tests deep understanding of concurrency')",
+          "ideal_answer_points": ["Mentioning race conditions", "Using a lock", "Optimistic concurrency"]
         }}
       ],
       "behavioral_questions": [
         {{
-          "question_text": "string",
-          "context": "string",
-          "ideal_answer_points": ["string", "string"]
+          "question_text": "Tell me about a time you disagreed with a manager...",
+          "context": "Tests conflict resolution",
+          "ideal_answer_points": ["Stayed calm", "Used data to argue", "Committed to final decision"]
         }}
       ]
     }}
@@ -100,7 +103,6 @@ async def generate_interview(data: UserInput):
         result = await agent.run(prompt)
         
         # --- NUCLEAR EXTRACTION LOGIC ---
-        # 1. Try to get raw text from known attributes
         content = ""
         if hasattr(result, 'data'):
             content = result.data
@@ -111,11 +113,9 @@ async def generate_interview(data: UserInput):
             
         print(f"Extracted Content: {str(content)[:100]}...")
 
-        # 2. Force Convert to String
         if not isinstance(content, str):
             content = str(content)
 
-        # 3. Regex to find the FIRST JSON object { ... }
         match = re.search(r'\{.*\}', content, re.DOTALL)
         
         if match:
@@ -126,7 +126,6 @@ async def generate_interview(data: UserInput):
 
         print("Parsing JSON...")
         
-        # 4. Final Parse
         try:
             json_data = json.loads(json_str)
         except json.JSONDecodeError:
@@ -134,7 +133,6 @@ async def generate_interview(data: UserInput):
             fixed_str = json_str.replace("'", '"')
             json_data = json.loads(fixed_str)
 
-        # 5. Validate with Pydantic
         parsed_data = InterviewResponse.model_validate(json_data)
         
         print("Success! Plan generated and parsed.")
