@@ -6,27 +6,27 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-
-# --- IMPORTS ---
 from pydantic_ai import Agent
 from pydantic_ai.models.groq import GroqModel
 
 load_dotenv()
 
-# --- 1. CONFIGURATION ---
+# --- CONFIGURATION ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-if not GROQ_API_KEY:
-    # Fallback for local testing if env var is missing
-    # But for Render, this will rely on the Environment Variable you set
-    pass 
-
-# --- 2. INITIALIZE MODEL ---
+# --- INITIALIZE MODEL ---
+# Using the largest model for maximum creativity
 model = GroqModel('llama-3.3-70b-versatile')
 
 agent = Agent(
     model,
-    system_prompt="You are a Senior Staff Engineer at a Tier-1 Tech Company (like Google or Netflix). Your goal is to expose weak candidates."
+    system_prompt="""You are a Principal Engineer at a top-tier tech company (Google/Netflix/Startup). 
+    You are interviewing a candidate who has been rejected before because they are too 'textbook'.
+    
+    YOUR GOAL:
+    Test their CREATIVITY and INTUITION. Do not ask standard questions. 
+    If they memorize LeetCode or System Design docs, they should fail this interview.
+    You want to see how they think when things go wrong or when requirements are weird."""
 )
 
 app = FastAPI()
@@ -55,94 +55,67 @@ class UserInput(BaseModel):
 
 @app.post("/generate", response_model=InterviewResponse)
 async def generate_interview(data: UserInput):
-    print("Received request... Sending to Groq (Llama 3.3)...")
+    print("Received request... Generating CREATIVE interview...")
 
-    # --- THE UPGRADED PROMPT ---
     prompt = f"""
-    Analyze this candidate for a high-bar technical role.
+    Analyze this candidate:
     RESUME: {data.resume_text}
     JOB: {data.job_description}
     
     TASK:
-    Create a 'Bar-Raiser' interview plan. 
+    Generate 5 TECHNICAL questions and 3 BEHAVIORAL questions.
     
-    GUIDELINES FOR TECHNICAL QUESTIONS:
-    1. NO "TEXTBOOK" DEFINITIONS. Do not ask "What is X?".
-    2. Ask SCENARIO-BASED questions. (e.g., "The production DB is slow. How do you debug?" or "Design a rate limiter.")
-    3. Focus on trade-offs, scalability, and edge cases.
-    4. If the resume lists React, ask about re-rendering performance or state management complex patterns.
-    5. If the resume lists Backend, ask about concurrency, caching, or database locking.
-
-    GUIDELINES FOR BEHAVIORAL:
-    1. Focus on conflict, failure, and ambiguity.
-    2. Ask for specific examples of when things went WRONG.
-
+    CRITICAL RULES FOR TECHNICAL QUESTIONS:
+    1. ❌ BAN LIST: Do NOT ask "What is polymorphism?", "Monolith vs Microservices", "Explain REST", or "What is a Class?".
+    2. ✅ CREATIVITY: Ask questions that have no single right answer.
+       - Example: "Design a rate limiter using ONLY a single text file. No Redis allowed."
+       - Example: "You accidentally deleted the production database. The backups are corrupt. What is your next 30 minutes like?"
+       - Example: "Explain recursion to a 5-year-old without using code."
+    3. If they know React, ask: "How would you break React's rendering engine?"
+    4. If they know Python, ask: "How would you implement a dictionary from scratch using only arrays?"
+    
+    CRITICAL RULES FOR BEHAVIORAL:
+    1. Ignore "Tell me about a time you worked in a team." (Too easy).
+    2. Ask: "Tell me about a time you technically disagreed with your boss, implemented it your way, and you were WRONG. How did you handle it?"
+    
     OUTPUT FORMAT (JSON ONLY):
-    Use double quotes for keys.
     {{
-      "feedback": "A brutally honest 2-sentence summary of the resume's weak spots.",
+      "feedback": "2 sentences on why this resume might fail a screening (be harsh but helpful).",
       "technical_questions": [
         {{
-          "question_text": "A complex scenario or design problem...",
-          "context": "Why this matters (e.g., 'Tests deep understanding of concurrency')",
-          "ideal_answer_points": ["Mentioning race conditions", "Using a lock", "Optimistic concurrency"]
+          "question_text": "The creative/tough scenario...",
+          "context": "Why this tests creativity vs memorization",
+          "ideal_answer_points": ["First point", "Second point"]
         }}
       ],
-      "behavioral_questions": [
-        {{
-          "question_text": "Tell me about a time you disagreed with a manager...",
-          "context": "Tests conflict resolution",
-          "ideal_answer_points": ["Stayed calm", "Used data to argue", "Committed to final decision"]
-        }}
-      ]
+      "behavioral_questions": [ ... ]
     }}
     """
 
     try:
-        # Run Pydantic AI Agent
         result = await agent.run(prompt)
         
-        # --- NUCLEAR EXTRACTION LOGIC ---
-        content = ""
-        if hasattr(result, 'data'):
-            content = result.data
-        elif hasattr(result, 'output'): 
-            content = result.output
-        else:
-            content = str(result)
-            
-        print(f"Extracted Content: {str(content)[:100]}...")
-
-        if not isinstance(content, str):
-            content = str(content)
-
-        match = re.search(r'\{.*\}', content, re.DOTALL)
+        # --- PARSING LOGIC ---
+        content = str(result.data) if hasattr(result, 'data') else str(result)
         
+        # Regex to find JSON
+        match = re.search(r'\{.*\}', content, re.DOTALL)
         if match:
-            json_str = match.group(0)
-            json_str = json_str.replace("```json", "").replace("```", "")
+            json_str = match.group(0).replace("```json", "").replace("```", "")
         else:
             json_str = content
 
-        print("Parsing JSON...")
-        
+        # Fix quotes if strictly necessary
         try:
             json_data = json.loads(json_str)
-        except json.JSONDecodeError:
-            print("Standard parse failed. Attempting quote fix...")
-            fixed_str = json_str.replace("'", '"')
-            json_data = json.loads(fixed_str)
+        except:
+            json_data = json.loads(json_str.replace("'", '"'))
 
-        parsed_data = InterviewResponse.model_validate(json_data)
-        
-        print("Success! Plan generated and parsed.")
-        return parsed_data
+        return InterviewResponse.model_validate(json_data)
 
     except Exception as e:
-        print(f"FINAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        print(f"ERROR: {e}")
+        raise HTTPException(status_code=500, detail="AI generation failed.")
 
 if __name__ == "__main__":
     import uvicorn
